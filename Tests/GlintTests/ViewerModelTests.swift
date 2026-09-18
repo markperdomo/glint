@@ -31,9 +31,117 @@ struct ViewerModelTests {
     }
     return folder
   }
-  private func makeModel() -> ViewerModel {
+  private func makeModel(cachesImages: Bool = true) -> ViewerModel {
     let defaults = UserDefaults(suiteName: "GlintTests-\(UUID().uuidString)")!
-    return ViewerModel(preferences: Preferences(defaults: defaults))
+    return ViewerModel(
+      preferences: Preferences(defaults: defaults),
+      pipeline: cachesImages ? .shared : ImagePipeline(byteLimit: 0),
+      thumbnailPipeline: cachesImages ? .thumbnails : ImagePipeline(byteLimit: 0))
+  }
+
+  private func updateCanvas(_ canvas: ImageCanvas, from model: ViewerModel) {
+    canvas.update(
+      image: model.displayImage, pixels: model.displayPixelSize,
+      zoom: model.zoomMode, custom: model.customZoom, reset: model.panReset,
+      background: model.preferences.background, nearest: model.preferences.nearestNeighbor,
+      enlarges: model.preferences.enlargesSmallImages, cropping: model.cropMode,
+      loading: model.isLoading)
+  }
+
+  @Test func uncachedNavigationHoldsPixelsAndFramingUntilReplacementIsReady() async throws {
+    let folder = try makeFolder()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let model = makeModel(cachesImages: false)
+    defer { model.suspend() }
+    model.preferences.remembersZoom = false
+    model.open([folder])
+    try await settled(model)
+    model.zoom(by: 32)
+    let canvas = ImageCanvas()
+    canvas.model = model
+    canvas.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+    updateCanvas(canvas, from: model)
+    let down = try #require(
+      NSEvent.keyEvent(
+        with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: 0, context: nil, characters: "\u{F701}",
+        charactersIgnoringModifiers: "\u{F701}", isARepeat: false, keyCode: 125))
+    #expect(canvas.handleKey(down))
+    canvas.layout()
+    let layer = try #require(canvas.layer?.sublayers?.first)
+    let original = try #require(model.displayImage)
+    let originalFrame = layer.frame
+    #expect(originalFrame.height > canvas.bounds.height)
+
+    model.select(model.visibleAssets[6].id)
+    #expect(model.isLoading)
+    #expect(model.displayImage == nil)
+    #expect(model.decoded == nil)
+    #expect(!model.canEdit)
+    #expect(model.zoomMode == .fit)
+    updateCanvas(canvas, from: model)
+    // Even an intervening layout must keep the old image's zoom and pan.
+    canvas.layout()
+    #expect((layer.contents as AnyObject?) === original)
+    #expect(!layer.isHidden)
+    #expect(layer.frame == originalFrame)
+    #expect(canvas.accessibilityValue() as? String == "image1.png")
+
+    // Repeated input navigates, rather than panning the retained old image.
+    #expect(canvas.handleKey(down))
+    #expect(model.current?.shortName == "image8.png")
+    updateCanvas(canvas, from: model)
+    #expect((layer.contents as AnyObject?) === original)
+    #expect(layer.frame == originalFrame)
+    try await settled(model)
+    updateCanvas(canvas, from: model)
+    #expect((layer.contents as AnyObject?) === model.displayImage)
+    #expect(model.displayImage?.width == 160)
+    #expect(!layer.isHidden)
+    // The 4:1 replacement arrives in Fit, with pan reset, in the same update.
+    #expect(abs(layer.frame.width - 368) < 0.001)
+    #expect(abs(layer.frame.height - 92) < 0.001)
+    #expect(abs(layer.frame.midX - canvas.bounds.midX) < 0.001)
+    #expect(abs(layer.frame.midY - canvas.bounds.midY) < 0.001)
+    #expect(canvas.accessibilityValue() as? String == "image8.png")
+
+    model.select(model.visibleAssets[10].id)
+    updateCanvas(canvas, from: model)
+    #expect(!layer.isHidden)
+    model.query = "no matching image"
+    updateCanvas(canvas, from: model)
+    #expect(layer.contents == nil)
+    #expect(layer.isHidden)
+  }
+
+  @Test func failedReplacementClearsTheRetainedCanvasImage() async throws {
+    let folder = try makeFolder()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let broken = folder.appendingPathComponent("broken.png")
+    try Data("not an image".utf8).write(to: broken)
+    let model = makeModel(cachesImages: false)
+    defer { model.suspend() }
+    model.open([folder.appendingPathComponent("image1.png")])
+    try await settled(model)
+    let canvas = ImageCanvas()
+    canvas.model = model
+    canvas.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+    updateCanvas(canvas, from: model)
+    let layer = try #require(canvas.layer?.sublayers?.first)
+    let original = try #require(model.displayImage)
+    model.select(try #require(model.visibleAssets.first { $0.url == broken }).id)
+    updateCanvas(canvas, from: model)
+    #expect((layer.contents as AnyObject?) === original)
+    #expect(!layer.isHidden)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while model.isLoading, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(!model.isLoading)
+    #expect(model.loadError != nil)
+    updateCanvas(canvas, from: model)
+    #expect(layer.contents == nil)
+    #expect(layer.isHidden)
   }
 
   @Test func fitEnlargementDefaultsOnAndRespectsSavedPreferences() throws {
@@ -89,6 +197,10 @@ struct ViewerModelTests {
     try await settled(model)
     let target = try #require(model.visibleAssets.first { $0.shortName == "image7.png" })
     let preview = try await thumbnails.image(for: target, maximumDimension: 40)
+    let canvas = ImageCanvas()
+    canvas.model = model
+    canvas.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+    updateCanvas(canvas, from: model)
     model.select(target.id)
     // No await: these pixels and their original dimensions must be published
     // before the asynchronous foreground request has any opportunity to run.
@@ -96,6 +208,11 @@ struct ViewerModelTests {
     #expect(model.displayImage === preview.image)
     #expect(model.displayPixelSize == CGSize(width: 140, height: 40))
     #expect(model.isLoading)
+    updateCanvas(canvas, from: model)
+    let layer = try #require(canvas.layer?.sublayers?.first)
+    #expect((layer.contents as AnyObject?) === preview.image)
+    #expect(!layer.isHidden)
+    #expect(abs(layer.frame.width / layer.frame.height - 3.5) < 0.001)
     try await settled(model)
     #expect(model.displayImage?.width == 140)
     #expect(model.loadError == nil)
@@ -198,6 +315,43 @@ struct ViewerModelTests {
     #expect(model.location?.path == second.path)
     #expect(model.current?.shortName == "image7.png")
     #expect(model.decoded?.metadata.pixelWidth == 140)
+  }
+
+  @Test func canvasScrollNavigationRespectsTheSettingPanAndOptionZoom() async throws {
+    let folder = try makeFolder()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let model = makeModel()
+    defer { model.suspend() }
+    model.open([folder])
+    try await settled(model)
+    let canvas = ImageCanvas()
+    canvas.model = model
+    canvas.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+    canvas.update(
+      image: model.displayImage, pixels: CGSize(width: 6000, height: 4000), zoom: .fit, custom: 1,
+      reset: 0, background: .charcoal, nearest: false, enlarges: false, cropping: false)
+    let wheel = try #require(
+      CGEvent(
+        scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: -1, wheel2: 0, wheel3: 0)
+    )
+    let event = try #require(NSEvent(cgEvent: wheel))
+    #expect(!event.hasPreciseScrollingDeltas)
+    let initial = model.selectedID
+    canvas.scrollWheel(with: event)
+    #expect(model.selectedID == initial)
+    model.preferences.scrollNavigation = .wheelOnly
+    canvas.scrollWheel(with: event)
+    #expect(model.current?.shortName == "image2.png")
+    try await settled(model)
+    let selected = model.selectedID
+    model.setZoom(.actual)
+    canvas.scrollWheel(with: event)
+    #expect(model.selectedID == selected)
+    model.setZoom(.fit)
+    wheel.flags = .maskAlternate
+    canvas.scrollWheel(with: try #require(NSEvent(cgEvent: wheel)))
+    #expect(model.selectedID == selected)
+    #expect(model.zoomMode == .custom)
   }
 
   @Test func arrowImmediatelyAfterZoomUsesTheNewMode() async throws {

@@ -4,6 +4,10 @@ import GlintCore
 @main
 struct GlintBench {
   static func main() async throws {
+    if CommandLine.arguments.count > 2, CommandLine.arguments[1] == "--archive" {
+      try await measureArchive(URL(fileURLWithPath: CommandLine.arguments[2]))
+      return
+    }
     guard CommandLine.arguments.count > 1 else {
       print("Usage: swift run -c release glint-bench /path/to/images [count] [maximum-dimension]")
       return
@@ -44,6 +48,54 @@ struct GlintBench {
     print("Work: \(stats.decodes) decodes, \(stats.coalesced) shared requests")
     try await measureProgressiveLoading(assets, dimension: dimension)
     print("Decode measurements only; this does not measure display latency or compare against Xee.")
+  }
+
+  private static func measureArchive(_ url: URL) async throws {
+    let store = ArchiveStore.shared
+    store.removeAll()
+    defer { store.removeAll() }
+    let opened = ContinuousClock.now
+    let collection = try FolderScanner.open([url])
+    let assets = ImageSortOrder.name.sorted(collection.assets)
+    guard collection.isArchive, let first = assets.first, let last = assets.last else {
+      throw GlintError.archive("Choose an archive containing images.")
+    }
+    print("Archive: \(url.lastPathComponent), \(assets.count) images")
+    print(String(format: "Index: %.3f ms", milliseconds(since: opened)))
+    // Disable the pixel cache to measure the archive cache plus actual image
+    // decoding, rather than a dictionary lookup in the image pipeline.
+    let pipeline = ImagePipeline(byteLimit: 0)
+    var start = ContinuousClock.now
+    _ = try await pipeline.image(for: first, maximumDimension: 2048)
+    print(String(format: "First image after index: %.3f ms", milliseconds(since: start)))
+    var forward: [Double] = []
+    for asset in assets.dropFirst().prefix(12) {
+      start = .now
+      _ = try await pipeline.image(for: asset, maximumDimension: 2048)
+      forward.append(milliseconds(since: start))
+    }
+    report("Forward (archive + decode)", times: forward)
+    start = .now
+    _ = try await pipeline.image(for: last, maximumDimension: 2048)
+    print(String(format: "Uncached jump to last: %.3f ms", milliseconds(since: start)))
+    let before = store.statistics.extractions
+    var reverse: [Double] = []
+    for asset in assets.suffix(12).reversed() {
+      start = .now
+      _ = try await pipeline.image(for: asset, maximumDimension: 2048)
+      reverse.append(milliseconds(since: start))
+    }
+    report("Reverse from last (archive + decode)", times: reverse)
+    print("Additional reverse extractions: \(store.statistics.extractions - before)")
+    let stats = store.statistics
+    print(
+      "Archive: \(stats.extractions) extractions, \(stats.cacheHits) cache hits, "
+        + "\(stats.memoryBytes / 1024 / 1024) MiB RAM cache, \(stats.diskBytes / 1024 / 1024) MiB disk cache"
+    )
+    var usage = rusage()
+    getrusage(RUSAGE_SELF, &usage)
+    print("Peak process RSS: \(usage.ru_maxrss / 1024 / 1024) MiB")
+    print("OS file cache is not flushed. Measures archive I/O + decoding, not display latency.")
   }
 
   private static func milliseconds(since start: ContinuousClock.Instant) -> Double {

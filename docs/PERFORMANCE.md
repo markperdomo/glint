@@ -3,7 +3,7 @@
 ## Design constraints
 
 - Directory enumeration, compressed-image decode, and Core Image adjustment rendering run off the main actor.
-- The canvas displays an already-decoded image through a persistent Core Animation layer.
+- The canvas displays an already-decoded image through a persistent Core Animation layer. During uncached navigation, it holds the previous image and framing until the next preview is ready, then swaps pixels and geometry together without a fade. This removes the intervening blank frame; it does not reduce decode time.
 - Navigation publishes cached viewer/sidebar pixels synchronously, or decodes a 512-pixel preview before requesting the final 1024/2048/4096/8192-pixel long-edge rendition. A typical window refines to 2048 pixels. High zoom requests 8192 pixels. Metadata and viewport geometry always retain original dimensions.
 - The viewer cache retains at most 256 MiB of decoded images; thumbnails retain at most 48 MiB. These are cache limits, **not a total RSS limit**: in-flight decoding, the visible image, image-source internals, Core Image, and compositor textures consume additional memory.
 - Prefetch starts symmetrically, then favors the navigation direction after repeated input: ahead 1/2/3, behind 1, ahead 4/5. It warms previews first, then the nearest two renditions, capped at 4096 pixels. Rapid input defers final refinement until 140 ms after the latest navigation input.
@@ -79,3 +79,34 @@ Some tests use the real Image I/O type registry and Core Image renderer. They sh
 - Close/reopen the window and test Finder Open With again.
 
 Before claiming mature parity: benchmark 10,000+ real-image folders, very large panoramas, slow/network volumes, diverse RAW/HDR/color profiles, and pathological animations. Track peak RSS and main-thread work with Instruments' Allocations and Time Profiler.
+
+
+### Archive benchmark — September 18, 2026
+
+Apple M4 Max, 36 GB RAM, macOS 27.0, Xcode 27.0 / optimized build. Generated independent random 2048 × 1024 PNGs (~6 MiB each), 86 images (~516 MiB) and 171 images (~1026 MiB). These are synthetic images, not a camera RAW or real-photo corpus. Each format has one run; OS file caches were not flushed. Other build activity may affect timings. Pixel caching is disabled in this benchmark, so warm results still include Image I/O decoding.
+
+| Archive | Index ms | First image after index ms | Forward median ms | First jump to last ms | Reverse median ms | Peak RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 512MiB.cbz | 9.025 | 11.351 | 8.441 | 8.530 | 8.790 | 336 |
+| 512MiB-independent.rar | 9.289 | 11.323 | 8.654 | 9.671 | 9.355 | 318 |
+| 512MiB-solid.rar | 9.921 | 49.623 | 46.792 | 2949.737 | 5.585 | 324 |
+| 512MiB-independent.7z | 9.014 | 11.245 | 8.362 | 176.381 | 5.488 | 324 |
+| 512MiB-solid.7z | 9.364 | 11.107 | 8.528 | 207.484 | 5.532 | 220 |
+| 1GiB.cbz | 11.997 | 11.540 | 8.254 | 8.982 | 8.662 | 336 |
+| 1GiB-independent.rar | 11.424 | 11.314 | 8.312 | 7.994 | 7.992 | 319 |
+| 1GiB-solid.rar | 13.079 | 47.543 | 44.242 | 7333.610 | 5.424 | 221 |
+| 1GiB-independent.7z | 17.083 | 14.147 | 8.553 | 402.493 | 5.260 | 324 |
+| 1GiB-solid.7z | 11.227 | 11.256 | 8.402 | 415.371 | 5.322 | 324 |
+
+Solid RAR and 7z performed **zero additional member decompressions** during the reverse pass: intervening image bytes had been cached. ZIP and non-solid RAR skip unrelated members on the initial jump; their reverse pass visits 11 previously unread images. The 1 GiB solid/7z cases retained ~60 MiB of member data in RAM and ~1026 MiB on temporary disk. Peak RSS includes decoder work, frameworks, mapped data, and buffers, and is not a cache-limit claim.
+
+7z currently caches intervening images even for independent blocks because libarchive's public API does not expose block membership. This costs extra work on a first distant jump, while making later backward browsing inexpensive. A solid RAR first jump remains materially slower. These numbers do not establish a speedup over Xee or measure keyboard-to-display latency.
+
+Reproduce (official `rar` and `7zz` tools are needed only to generate fixtures, not to run Glint):
+
+```sh
+python3 Scripts/generate-archive-fixtures.py /tmp/Glint-Archives --large --rar /path/to/rar --sevenzip /path/to/7zz
+swift run -c release glint-bench --archive /tmp/Glint-Archives/1GiB-solid.rar
+```
+
+Sparse 512 MiB / 1 GiB ZIP-offset regressions also run in `swift test`; these test bounded range reads, not representative throughput.

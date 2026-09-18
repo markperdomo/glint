@@ -25,17 +25,19 @@ for path in sorted((root / "Sources/Glint").glob("*.swift")):
 
 assets = object_("assets", 'isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT;')
 assets_build = object_("assets-build", f"isa = PBXBuildFile; fileRef = {assets};")
+notices = object_("notices", 'isa = PBXFileReference; lastKnownFileType = text; path = Resources/ThirdPartyNotices.txt; sourceTree = SOURCE_ROOT;')
+notices_build = object_("notices-build", f"isa = PBXBuildFile; fileRef = {notices};")
 plist = object_("plist", 'isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/Info.plist; sourceTree = SOURCE_ROOT;')
 product = object_("product", 'isa = PBXFileReference; explicitFileType = wrapper.application; path = Glint.app; sourceTree = BUILT_PRODUCTS_DIR;')
 products = object_("products", f"isa = PBXGroup; children = ({product},); name = Products; sourceTree = \"<group>\";")
 sources = object_("sources-group", f'isa = PBXGroup; children = ({",".join(source_refs)},); name = App; sourceTree = "<group>";')
-resources = object_("resources-group", f'isa = PBXGroup; children = ({assets},{plist},); name = Resources; sourceTree = "<group>";')
+resources = object_("resources-group", f'isa = PBXGroup; children = ({assets},{plist},{notices},); name = Resources; sourceTree = "<group>";')
 main_group = object_("main-group", f'isa = PBXGroup; children = ({sources},{resources},{products},); sourceTree = "<group>";')
 package = object_("local-package", 'isa = XCLocalSwiftPackageReference; relativePath = .;')
 core = object_("core-product", f"isa = XCSwiftPackageProductDependency; package = {package}; productName = GlintCore;")
 core_build = object_("core-build", f"isa = PBXBuildFile; productRef = {core};")
 source_phase = object_("sources-phase", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join(source_builds)},); runOnlyForDeploymentPostprocessing = 0;")
-resource_phase = object_("resources-phase", f"isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({assets_build},); runOnlyForDeploymentPostprocessing = 0;")
+resource_phase = object_("resources-phase", f"isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({assets_build},{notices_build},); runOnlyForDeploymentPostprocessing = 0;")
 framework_phase = object_("frameworks-phase", f"isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({core_build},); runOnlyForDeploymentPostprocessing = 0;")
 
 project_configs, target_configs = [], []

@@ -16,7 +16,9 @@ public enum ZIPArchive {
   public static let maximumMemberBytes = 256 * 1_024 * 1_024
 
   public static func entries(at url: URL) throws -> [ZIPEntry] {
-    let data = try Data(contentsOf: url, options: .mappedIfSafe)
+    let file = try ZIPFile(url: url)
+    let tail = try file.read(at: max(0, file.size - 65_557), count: min(file.size, 65_557))
+    var data = tail
     guard data.count >= 22 else { throw GlintError.archive("This is not a valid ZIP archive.") }
     let lower = max(0, data.count - 65_557)
     guard
@@ -35,20 +37,22 @@ public enum ZIPArchive {
     guard count != 0xffff, start != Int(UInt32.max), size != Int(UInt32.max) else {
       throw GlintError.unsupported("ZIP64 archives are not supported yet.")
     }
-    guard start <= end, size <= end - start else {
+    let directoryEnd = file.size - tail.count + end
+    guard start <= directoryEnd, size <= directoryEnd - start, size <= 32 * 1024 * 1024 else {
       throw GlintError.archive("The ZIP directory has invalid bounds.")
     }
-    var offset = start
+    data = try file.read(at: start, count: size)
+    var offset = 0
     var result: [ZIPEntry] = []
     for _ in 0..<count {
       try Task.checkCancellation()
-      guard offset + 46 <= start + size, data.u32(offset) == 0x0201_4b50 else {
+      guard offset + 46 <= size, data.u32(offset) == 0x0201_4b50 else {
         throw GlintError.archive("The ZIP directory is damaged.")
       }
       let flags = data.u16(offset + 8)
       let nameLength = Int(data.u16(offset + 28))
       let next = offset + 46 + nameLength + Int(data.u16(offset + 30)) + Int(data.u16(offset + 32))
-      guard next <= start + size else {
+      guard next <= size else {
         throw GlintError.archive("A ZIP member has invalid bounds.")
       }
       let nameData = data.subdata(in: (offset + 46)..<(offset + 46 + nameLength))
@@ -81,20 +85,22 @@ public enum ZIPArchive {
 
   public static func read(_ entry: ZIPEntry, from url: URL) throws -> Data {
     try Task.checkCancellation()
-    guard entry.uncompressedSize <= maximumMemberBytes, entry.compressedSize <= maximumMemberBytes
+    guard entry.uncompressedSize >= 0, entry.compressedSize >= 0,
+      entry.uncompressedSize <= maximumMemberBytes, entry.compressedSize <= maximumMemberBytes
     else {
       throw GlintError.tooLarge("This archive member exceeds the 256 MB decode limit.")
     }
-    let data = try Data(contentsOf: url, options: .mappedIfSafe)
+    let file = try ZIPFile(url: url)
     let local = entry.localOffset
-    guard local >= 0, local + 30 <= data.count, data.u32(local) == 0x0403_4b50 else {
+    let data = try file.read(at: local, count: 30)
+    guard data.u32(0) == 0x0403_4b50 else {
       throw GlintError.archive("The ZIP member header is damaged.")
     }
-    let start = local + 30 + Int(data.u16(local + 26)) + Int(data.u16(local + 28))
-    guard start <= data.count, entry.compressedSize <= data.count - start else {
+    let start = local + 30 + Int(data.u16(26)) + Int(data.u16(28))
+    guard start <= file.size, entry.compressedSize <= file.size - start else {
       throw GlintError.archive("The ZIP member is truncated.")
     }
-    let compressed = data.subdata(in: start..<(start + entry.compressedSize))
+    let compressed = try file.read(at: start, count: entry.compressedSize)
     let output: Data
     switch entry.method {
     case 0:
@@ -111,14 +117,21 @@ public enum ZIPArchive {
         throw GlintError.archive("ZIP decompression could not start.")
       }
       defer { inflateEnd(&stream) }
-      let status: Int32 = compressed.withUnsafeBytes { input in
-        buffer.withUnsafeMutableBytes { destination in
+      let status: Int32 = try compressed.withUnsafeBytes { input in
+        try buffer.withUnsafeMutableBytes { destination in
           stream.next_in = UnsafeMutablePointer(
             mutating: input.bindMemory(to: Bytef.self).baseAddress)
           stream.avail_in = uInt(compressed.count)
-          stream.next_out = destination.bindMemory(to: Bytef.self).baseAddress
-          stream.avail_out = uInt(destination.count)
-          return inflate(&stream, Z_FINISH)
+          var result = Z_OK
+          repeat {
+            try Task.checkCancellation()
+            let position = Int(stream.total_out)
+            stream.next_out = destination.bindMemory(to: Bytef.self).baseAddress!.advanced(
+              by: position)
+            stream.avail_out = uInt(min(128 * 1024, destination.count - position))
+            result = inflate(&stream, Z_NO_FLUSH)
+          } while result == Z_OK && Int(stream.total_out) < destination.count
+          return result
         }
       }
       guard status == Z_STREAM_END, stream.total_out == entry.uncompressedSize,
@@ -148,5 +161,28 @@ extension Data {
   }
   fileprivate func u32(_ offset: Int) -> UInt32 {
     UInt32(u16(offset)) | (UInt32(u16(offset + 2)) << 16)
+  }
+}
+
+/// Bounded reads avoid mapping/copying a whole 1 GiB archive for every rendition.
+private final class ZIPFile {
+  let size: Int
+  private let handle: FileHandle
+  init(url: URL) throws {
+    handle = try FileHandle(forReadingFrom: url)
+    size = Int(try handle.seekToEnd())
+  }
+  deinit { try? handle.close() }
+  func read(at offset: Int, count: Int) throws -> Data {
+    try Task.checkCancellation()
+    guard offset >= 0, count >= 0, offset <= size, count <= size - offset else {
+      throw GlintError.archive("The ZIP member is truncated or has invalid bounds.")
+    }
+    try handle.seek(toOffset: UInt64(offset))
+    guard let data = try handle.read(upToCount: count), data.count == count else {
+      if count == 0 { return Data() }
+      throw GlintError.archive("The ZIP member is truncated.")
+    }
+    return data
   }
 }

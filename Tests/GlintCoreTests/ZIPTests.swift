@@ -142,3 +142,38 @@ private func makeZIP(name: String, payload: Data, deflated: Bool = false, corrup
     localOffset: 0, method: 0, checksum: 0)
   #expect(throws: (any Error).self) { try ZIPArchive.read(oversized, from: url) }
 }
+
+@Test(arguments: [512 * 1024 * 1024, 1024 * 1024 * 1024])
+func zipReadsSmallImagesAcrossLargeArchiveOffsets(offset: Int) throws {
+  let directory = try FixtureDirectory()
+  defer { directory.remove() }
+  let payload = try Data(contentsOf: directory.image("source.png"))
+  let original = try makeZIP(name: "page.png", payload: payload)
+  let directoryStart = 30 + "page.png".utf8.count + payload.count
+  var central = Data(original[directoryStart...])
+  // Point the central directory at a sparse position in the archive. The image
+  // itself remains small: this catches accidental whole-archive allocations.
+  var encodedOffset = Data()
+  encodedOffset.append32(UInt32(offset))
+  central.replaceSubrange((central.count - 6)..<(central.count - 2), with: encodedOffset)
+  let url = directory.url.appendingPathComponent("large.cbz")
+  try original.prefix(directoryStart).write(to: url)
+  let file = try FileHandle(forWritingTo: url)
+  try file.seek(toOffset: UInt64(offset))
+  try file.write(contentsOf: central)
+  try file.close()
+  let entry = try #require(ZIPArchive.entries(at: url).first)
+  #expect(try ZIPArchive.read(entry, from: url) == payload)
+}
+
+@Test func zipHandlesEmptyAndChunkBoundaryDeflateMembers() throws {
+  let directory = try FixtureDirectory()
+  defer { directory.remove() }
+  let url = directory.url.appendingPathComponent("boundary.zip")
+  for count in [0, 128 * 1024, 128 * 1024 + 1] {
+    let bytes = Data(repeating: 72, count: count)
+    try makeZIP(name: "image.png", payload: bytes, deflated: true).write(to: url)
+    let entry = try #require(ZIPArchive.entries(at: url).first)
+    #expect(try ZIPArchive.read(entry, from: url) == bytes)
+  }
+}

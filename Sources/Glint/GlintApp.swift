@@ -1,4 +1,5 @@
 import AppKit
+import GlintCore
 import SwiftUI
 
 @main
@@ -64,5 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     model?.window?.makeKeyAndOrderFront(nil)
     return true
   }
-  func applicationWillTerminate(_ notification: Notification) { model?.suspend() }
+  func applicationWillTerminate(_ notification: Notification) {
+    model?.suspend()
+    ArchiveStore.shared.removeAll()
+  }
 }

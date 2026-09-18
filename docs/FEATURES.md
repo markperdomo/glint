@@ -5,6 +5,7 @@ Inventory based on the supplied Xee project's controllers, image/source classes,
 | Xee capability | Glint 0.1 | Notes / next work |
 | --- | --- | --- |
 | Open an image and browse siblings | Implemented | No import database |
+| Seamless image switching | Implemented | Holds the current image and framing until the next preview is ready; no intervening blank frame or fade |
 | Open folders and multiple files | Implemented | Hidden files and packages skipped |
 | Recursive browsing | Implemented | Explicit opt-in; symlink subtrees skipped |
 | Next/previous/first/last | Implemented | Arrow keys, Space, Home/End, menu commands |
@@ -17,7 +18,7 @@ Inventory based on the supplied Xee project's controllers, image/source classes,
 | Fit / shrink / enlarge / actual / fill | Implemented | Retina-aware geometry and overflow tolerance |
 | Preserve zoom | Implemented | Settings preference |
 | Preserve pan/focus across images | Planned | New images currently recenter |
-| Pan, wheel, interpolation | Implemented | Optional scroll-to-browse, pinch zoom, sharp-pixel mode |
+| Pan, wheel, interpolation | Implemented | Off / mouse wheel / mouse wheel and trackpad scroll navigation; one image per trackpad gesture, momentum ignored; pinch zoom and sharp-pixel mode |
 | Full screen and hide chrome | Implemented | Native full screen and distraction-free mode |
 | Automatic window sizing/placement rules | Planned | Native resizable window today |
 | Multiple independent viewer windows | Planned | One browsing session today |
@@ -29,9 +30,10 @@ Inventory based on the supplied Xee project's controllers, image/source classes,
 | GIF/APNG/WebP playback | Partial | Decoded through Image I/O; loops continuously; finite-loop semantics and frame scheduling need refinement |
 | Multi-frame TIFF / icons | Implemented | Frame stepping for Image I/O image collections |
 | PDF sources | Implemented | Page stepping and raster export; password entry remains |
-| ZIP/CBZ archives | Implemented, constrained | Stored/Deflate, CRC validation, no extraction, 256 MB member limit |
-| Encrypted ZIP, ZIP64, RAR/CBR, 7z | Planned | Replace the old XADMaster dependency with a maintained archive backend |
-| Nested archives and archive password UI | Planned | Not silently treated as images |
+| ZIP/CBZ archives | Implemented, constrained | Indexed range reads, Stored/Deflate, CRC validation, 256 MiB per-member limit; total archives tested around 512 MiB and 1 GiB |
+| RAR/CBR and 7z/CB7 | Implemented | UnRAR handles RAR4/RAR5 including solid streams; system libarchive handles 7z. Shared 64 MiB RAM / 1.5 GiB disk member cache; no external tools required |
+| Encrypted archives, split volumes, ZIP64 | Out of current scope | Focus is ordinary unencrypted ZIP/RAR/7z and browsing speed |
+| Nested archives and archive password UI | Out of current scope | Nested archive members are skipped; encrypted sources report an error |
 | Clipboard source and image copy | Implemented | Clipboard images get temporary TIFF files; copied output is display resolution |
 | Rotate, mirror, crop | Implemented | Temporary previews and full-resolution export |
 | Undo/redo adjustments | Implemented | Separate adjustment history; no filesystem undo |
@@ -51,7 +53,7 @@ Inventory based on the supplied Xee project's controllers, image/source classes,
 ## Next milestones
 
 1. **Make everyday browsing dependable:** real-photo benchmarks against Xee, very large folders, file operation recovery, pan persistence, shortcut customization, and full-resolution tiling beyond the 8192-pixel viewing limit.
-2. **Finish modern source coverage:** archive passwords/ZIP64/RAR, finite animation loops and frame timing, recursive file watching, independent windows, and security-scoped bookmarks.
+2. **Finish modern source coverage:** archive performance across real collections, finite animation loops and frame timing, recursive file watching, independent windows, and security-scoped bookmarks.
 3. **Recover specialist workflows:** coefficient-domain JPEG transforms, metadata-preserving export, saved destinations, user-selectable editors, RAW/HDR fidelity, and full-resolution printing.
 4. **Historical format compatibility:** audited modern decoder modules, malformed-input tests, and a representative corpus for each old format. Keep these modules away from the common browsing path.
 5. **Distribution:** signing, notarization, accessibility audit, localization, crash reporting opt-in if desired, and release automation.

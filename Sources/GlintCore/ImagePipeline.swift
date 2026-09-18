@@ -28,6 +28,7 @@ public actor ImagePipeline {
     let order: UInt64
     var priority: Priority
     var running = false
+    var worker: Task<Void, Never>?
     var waiters: [UUID: CheckedContinuation<DecodedImage, any Error>]
   }
 
@@ -99,7 +100,12 @@ public actor ImagePipeline {
     else { return }
     // Image I/O cannot interrupt a synchronous decode. Keep a running result
     // adoptable and cache it, but discard abandoned work that has not started.
-    requests[key] = request.waiters.isEmpty && !request.running ? nil : request
+    if request.waiters.isEmpty && key.asset.archiveEntry != nil {
+      request.worker?.cancel()
+      requests[key] = nil
+    } else {
+      requests[key] = request.waiters.isEmpty && !request.running ? nil : request
+    }
     continuation.resume(throwing: CancellationError())
     startWork()
   }
@@ -123,7 +129,9 @@ public actor ImagePipeline {
       if speculative { activePrefetches += 1 }
       decodes += 1
       let decoder = decoder
-      Task.detached(priority: next.value.priority == .foreground ? .userInitiated : .utility) {
+      requests[key]?.worker = Task.detached(
+        priority: next.value.priority == .foreground ? .userInitiated : .utility
+      ) {
         let result = Result { try decoder(key.asset, key.frame, key.dimension) }
         await self.complete(key, id: id, speculative: speculative, result: result)
       }
@@ -157,6 +165,7 @@ public actor ImagePipeline {
   private func invalidateRequests(where matches: (ImageCacheKey) -> Bool) {
     for key in requests.keys.filter(matches) {
       guard let request = requests.removeValue(forKey: key) else { continue }
+      if key.asset.archiveEntry != nil { request.worker?.cancel() }
       for continuation in request.waiters.values {
         continuation.resume(throwing: CancellationError())
       }

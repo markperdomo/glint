@@ -4,12 +4,12 @@ import UniformTypeIdentifiers
 
 public struct ImageAsset: Identifiable, Hashable, Sendable {
   public let url: URL
-  public let archiveEntry: ZIPEntry?
+  public let archiveEntry: ArchiveEntry?
   public let byteCount: Int64
   public let modified: Date
 
   public init(
-    url: URL, archiveEntry: ZIPEntry? = nil, byteCount: Int64 = 0, modified: Date = .distantPast
+    url: URL, archiveEntry: ArchiveEntry? = nil, byteCount: Int64 = 0, modified: Date = .distantPast
   ) {
     self.url = url.standardizedFileURL
     self.archiveEntry = archiveEntry
@@ -17,7 +17,7 @@ public struct ImageAsset: Identifiable, Hashable, Sendable {
     self.modified = modified
   }
 
-  public var id: String { url.path + (archiveEntry.map { "::\($0.localOffset):\($0.name)" } ?? "") }
+  public var id: String { url.path + (archiveEntry.map { "::\($0.index):\($0.name)" } ?? "") }
   public var name: String { archiveEntry?.name ?? url.lastPathComponent }
   public var shortName: String { (name as NSString).lastPathComponent }
   public var pathExtension: String { (name as NSString).pathExtension.lowercased() }
@@ -25,13 +25,13 @@ public struct ImageAsset: Identifiable, Hashable, Sendable {
   public var isFile: Bool { archiveEntry == nil }
 
   public func data() throws -> Data {
-    if let archiveEntry { return try ZIPArchive.read(archiveEntry, from: url) }
+    if let archiveEntry { return try ArchiveStore.shared.read(archiveEntry, from: url) }
     return try Data(contentsOf: url, options: .mappedIfSafe)
   }
 }
 
 public enum ImageFormats {
-  public static let archiveExtensions: Set<String> = ["zip", "cbz"]
+  public static let archiveExtensions: Set<String> = ["zip", "cbz", "rar", "cbr", "7z", "cb7"]
   public static let supportedTypes: [UTType] = (CGImageSourceCopyTypeIdentifiers() as! [String])
     .compactMap(UTType.init)
   public static let extensions: Set<String> = Set(

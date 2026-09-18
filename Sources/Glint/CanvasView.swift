@@ -17,7 +17,8 @@ struct CanvasView: NSViewRepresentable {
       image: model.displayImage, pixels: model.displayPixelSize,
       zoom: model.zoomMode, custom: model.customZoom, reset: model.panReset,
       background: model.preferences.background, nearest: model.preferences.nearestNeighbor,
-      enlarges: model.preferences.enlargesSmallImages, cropping: model.cropMode)
+      enlarges: model.preferences.enlargesSmallImages, cropping: model.cropMode,
+      loading: model.isLoading)
   }
 }
 
@@ -37,7 +38,8 @@ final class ImageCanvas: NSView {
   private var dragPan = CGPoint.zero
   private var cropStart: CGPoint?
   private var isCropping = false
-  private var lastScroll: TimeInterval = 0
+  private var holdingPreviousImage = false
+  private var scrollNavigation = ScrollNavigation()
   private var monitor: Any?
   private var background = CanvasBackground.charcoal
   private static let checker = NSColor(
@@ -97,36 +99,49 @@ final class ImageCanvas: NSView {
 
   func update(
     image: CGImage?, pixels: CGSize, zoom: ZoomMode, custom: CGFloat, reset: Int,
-    background: CanvasBackground, nearest: Bool, enlarges: Bool, cropping: Bool
+    background: CanvasBackground, nearest: Bool, enlarges: Bool, cropping: Bool,
+    loading: Bool = false
   ) {
-    if self.reset != reset {
-      pan = .zero
-      self.reset = reset
-      cropLayer.path = nil
-    }
-    imageLayer.contents = image
-    model?.canvasDidSubmit(image)
-    imageLayer.magnificationFilter = nearest ? .nearest : .linear
-    imageLayer.isHidden = image == nil
-    pixelSize = pixels
-    mode = zoom
-    self.custom = custom
-    self.enlarges = enlarges
     if self.background != background {
       self.background = background
       needsDisplay = true
     }
     isCropping = cropping
     if !cropping { cropLayer.path = nil }
+    holdingPreviousImage = loading && image == nil && imageLayer.contents != nil
+    // Retain only the presentation while a new selection decodes. The model
+    // still clears its pixels and metadata, so edits/copy cannot use the old image.
+    guard !holdingPreviousImage else { return }
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    if self.reset != reset {
+      pan = .zero
+      self.reset = reset
+      cropLayer.path = nil
+    }
+    imageLayer.contents = image
+    imageLayer.magnificationFilter = nearest ? .nearest : .linear
+    imageLayer.isHidden = image == nil
+    pixelSize = pixels
+    mode = zoom
+    self.custom = custom
+    self.enlarges = enlarges
     setAccessibilityValue(model?.current?.shortName ?? "No image")
     needsLayout = true
+    // Submit the replacement pixels and their geometry together, without a fade.
+    layoutSubtreeIfNeeded()
+    CATransaction.commit()
+    model?.canvasDidSubmit(image)
   }
 
   private var viewport: Viewport {
     Viewport(
       viewport: bounds.insetBy(dx: 16, dy: 16).size, pixels: pixelSize,
-      backingScale: window?.backingScaleFactor ?? 2, mode: model?.zoomMode ?? mode,
-      customScale: model?.customZoom ?? custom, enlargesSmallImages: enlarges)
+      backingScale: window?.backingScaleFactor ?? 2,
+      mode: holdingPreviousImage ? mode : (model?.zoomMode ?? mode),
+      customScale: holdingPreviousImage ? custom : (model?.customZoom ?? custom),
+      enlargesSmallImages: enlarges)
   }
 
   override func layout() {
@@ -170,6 +185,7 @@ final class ImageCanvas: NSView {
 
   override func mouseDown(with event: NSEvent) {
     window?.makeFirstResponder(self)
+    guard !holdingPreviousImage else { return }
     let point = convert(event.locationInWindow, from: nil)
     if isCropping {
       guard imageRect.contains(point) else { return }
@@ -183,6 +199,7 @@ final class ImageCanvas: NSView {
     }
   }
   override func mouseDragged(with event: NSEvent) {
+    guard !holdingPreviousImage else { return }
     let point = convert(event.locationInWindow, from: nil)
     if isCropping, let start = cropStart {
       let rect = CGRect(
@@ -211,21 +228,27 @@ final class ImageCanvas: NSView {
   }
   override func scrollWheel(with event: NSEvent) {
     if event.modifierFlags.contains(.option) {
+      scrollNavigation.reset()
       model?.zoom(by: pow(1.015, event.scrollingDeltaY))
       return
     }
-    if viewport.canPanHorizontally || viewport.canPanVertically {
+    if !holdingPreviousImage && (viewport.canPanHorizontally || viewport.canPanVertically) {
+      scrollNavigation.reset()
       let multiplier: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 12
       pan = viewport.clampedPan(
         CGPoint(
           x: pan.x + event.scrollingDeltaX * multiplier,
           y: pan.y - event.scrollingDeltaY * multiplier))
       needsLayout = true
-    } else if model?.preferences.scrollToBrowse == true, abs(event.scrollingDeltaY) > 1,
-      event.timestamp - lastScroll > 0.18, event.momentumPhase.isEmpty
+    } else if let model,
+      let offset = scrollNavigation.offset(
+        for: .init(
+          deltaX: event.scrollingDeltaX, deltaY: event.scrollingDeltaY,
+          precise: event.hasPreciseScrollingDeltas, phase: event.phase,
+          momentumPhase: event.momentumPhase, timestamp: event.timestamp),
+        mode: model.preferences.scrollNavigation)
     {
-      lastScroll = event.timestamp
-      model?.navigate(event.scrollingDeltaY < 0 ? 1 : -1)
+      model.navigate(offset)
     }
   }
 
@@ -243,8 +266,9 @@ final class ImageCanvas: NSView {
         model.navigate(forward ? 100 : -100)
       } else if modifiers.contains(.shift) {
         model.navigate(forward ? 10 : -10)
-      } else if (horizontal && viewport.canPanHorizontally)
-        || (vertical && viewport.canPanVertically)
+      } else if !holdingPreviousImage
+        && ((horizontal && viewport.canPanHorizontally)
+          || (vertical && viewport.canPanVertically))
       {
         if horizontal { pan.x += forward ? -80 : 80 } else { pan.y += forward ? 80 : -80 }
         pan = viewport.clampedPan(pan)

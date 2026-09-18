@@ -96,7 +96,7 @@ final class ViewerModel {
     let panel = NSOpenPanel()
     panel.title = "Open in Glint"
     panel.message =
-      "Choose images, a folder, or a ZIP/CBZ archive. Opening one image also opens its folder."
+      "Choose images, a folder, or a ZIP, RAR, or 7z archive. Opening one image also opens its folder."
     panel.canChooseDirectories = true
     panel.canChooseFiles = true
     panel.allowsMultipleSelection = true
@@ -289,7 +289,8 @@ final class ViewerModel {
     }
     if !preserving {
       // Publish identity, dimensions, and cached pixels in the same main-actor
-      // turn. Never retain the previous selection under the new filename.
+      // turn. The canvas can hold its previous presentation during loading,
+      // but model pixels and metadata must belong to the current selection.
       let candidates = [
         pipeline.cachedImage(for: asset, frame: frameIndex, maximumDimension: decodeDimension),
         thumbnailPipeline.cachedImage(

@@ -11,12 +11,12 @@ public enum FolderScanner {
   // Call from a detached task. Resource values are requested in one directory pass.
   public static func open(_ urls: [URL], recursive: Bool = false) throws -> ImageCollection {
     guard let first = urls.first else {
-      throw GlintError.unreadable("Choose an image, folder, or ZIP/CBZ archive.")
+      throw GlintError.unreadable("Choose an image, folder, or ZIP, RAR, or 7z archive.")
     }
     try Task.checkCancellation()
     if urls.count == 1, ImageFormats.isArchive(first) {
       let values = try first.resourceValues(forKeys: [.contentModificationDateKey])
-      let entries = try ZIPArchive.entries(at: first)
+      let entries = try ArchiveStore.shared.entries(at: first)
       let assets = entries.filter { ImageFormats.isImage(URL(fileURLWithPath: $0.name)) }
         .map {
           ImageAsset(
@@ -28,7 +28,7 @@ public enum FolderScanner {
     let firstIsDirectory = try first.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true
     if urls.count == 1, !firstIsDirectory, !ImageFormats.isImage(first) {
       throw GlintError.unsupported(
-        "“\(first.lastPathComponent)” is not a supported image, PDF, or ZIP/CBZ archive.")
+        "“\(first.lastPathComponent)” is not a supported image, PDF, or ZIP, RAR, or 7z archive.")
     }
     let location = firstIsDirectory ? first : first.deletingLastPathComponent()
     let candidates: [URL]
