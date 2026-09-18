@@ -166,7 +166,7 @@ struct ShortcutsView: View {
   ]
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
-      Text("At your fingertips.").font(.system(size: 28, design: .serif))
+      Text("Keyboard Shortcuts").font(.title2.weight(.semibold))
       Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 12) {
         ForEach(shortcuts, id: \.0) { key, action in
           GridRow {

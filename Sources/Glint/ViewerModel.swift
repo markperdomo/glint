@@ -75,7 +75,7 @@ final class ViewerModel {
     selectedIndex.map { "\($0 + 1) of \(visibleAssets.count)" } ?? "\(visibleAssets.count) images"
   }
   var title: String { current?.shortName ?? "Glint" }
-  var subtitle: String { location?.lastPathComponent ?? "A little closer." }
+  var subtitle: String { location?.lastPathComponent ?? "" }
   var canUndo: Bool { !editHistory.isEmpty }
   var canRedo: Bool { !redoHistory.isEmpty }
   var canEdit: Bool { decoded != nil && !isLoading && !animationPlaying }

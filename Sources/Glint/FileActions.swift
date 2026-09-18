@@ -169,7 +169,7 @@ struct ExportSheet: View {
   @State private var quality = 0.92
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
-      Text("Make it yours.").font(.system(size: 28, design: .serif))
+      Text("Export Image").font(.title2.weight(.semibold))
       Text("Export the current image or frame with your adjustments applied.")
         .font(.callout).foregroundStyle(.secondary)
       Form {

@@ -15,10 +15,7 @@ struct WelcomeView: View {
               Color(red: 0.29, green: 0.37, blue: 0.20))
           }
           .padding(.bottom, 22)
-          Text("A little closer.").font(.system(size: 44, weight: .regular, design: .serif))
-            .tracking(-1)
-          Text("Your images. At the speed of curiosity.")
-            .font(.system(size: 15)).foregroundStyle(.secondary).padding(.top, 12)
+          Text("Glint").font(.system(size: 36, weight: .medium))
           Button {
             model.openPanel()
           } label: {
@@ -31,9 +28,7 @@ struct WelcomeView: View {
           if !model.recentURLs.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
               HStack {
-                Text("PICK UP WHERE YOU LEFT OFF").font(.system(size: 9, weight: .medium)).tracking(
-                  1.5
-                ).foregroundStyle(.secondary)
+                Text("Recent").font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 Spacer()
                 Button("Clear") { model.clearRecent() }.font(.caption).buttonStyle(.plain)
                   .foregroundStyle(.tertiary)

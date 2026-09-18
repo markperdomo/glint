@@ -34,10 +34,8 @@ struct BrowserSidebar: View {
       }.padding(16)
       if model.assets.isEmpty {
         VStack(alignment: .leading, spacing: 14) {
-          Label("FOLDERS, WITHOUT THE FUSS", systemImage: "sparkle").font(
-            .system(size: 9, weight: .medium)
-          ).tracking(1).foregroundStyle(.tertiary)
-          Text("Open an image to explore everything beside it.").font(.callout).foregroundStyle(
+          Text("Browse Images").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+          Text("Open an image to browse its folder.").font(.callout).foregroundStyle(
             .secondary)
           Button("Open a Folder…") { model.openPanel() }
           Spacer()

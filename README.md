@@ -1,6 +1,6 @@
 # Glint
 
-**A little closer.** A native, keyboard-first image viewer for modern Macs.
+A native, keyboard-first image viewer for modern Macs.
 
 Glint is a fresh Swift reimplementation of the infamous Xee image viewer: open one image, browse its folder, and stay out of the way. It uses SwiftUI, AppKit, Image I/O, Core Animation, and Core Image. There is no web view, imported Objective-C application code, or bundled legacy decoder framework.
 
