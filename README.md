@@ -2,7 +2,7 @@
 
 **A little closer.** A native, keyboard-first image viewer for modern Macs.
 
-Glint is a fresh Swift reimplementation of the everyday Xee experience: open one image, browse its folder, and stay out of the way. It uses SwiftUI, AppKit, Image I/O, Core Animation, and Core Image. There is no web view, imported Objective-C application code, or bundled legacy decoder framework.
+Glint is a fresh Swift reimplementation of the infamous Xee image viewer: open one image, browse its folder, and stay out of the way. It uses SwiftUI, AppKit, Image I/O, Core Animation, and Core Image. There is no web view, imported Objective-C application code, or bundled legacy decoder framework.
 
 **Status: usable 0.1 foundation.** Fast folder browsing is the first priority. This is not yet a complete replacement for every Xee feature or historical format; [the feature inventory](docs/FEATURES.md) tracks that work explicitly.
 
