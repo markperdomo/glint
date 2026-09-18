@@ -29,7 +29,7 @@ final class ImageCanvas: NSView {
   private var pixelSize = CGSize.zero
   private var mode = ZoomMode.fit
   private var custom: CGFloat = 1
-  private var enlarges = false
+  private var enlarges = true
   private var pan = CGPoint.zero
   private var reset = -1
   private var imageRect = CGRect.zero

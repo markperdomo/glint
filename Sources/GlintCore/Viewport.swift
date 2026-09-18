@@ -15,7 +15,7 @@ public struct Viewport: Sendable {
 
   public init(
     viewport: CGSize, pixels: CGSize, backingScale: CGFloat = 2, mode: ZoomMode = .fit,
-    customScale: CGFloat = 1, enlargesSmallImages: Bool = false
+    customScale: CGFloat = 1, enlargesSmallImages: Bool = true
   ) {
     self.viewport = viewport
     self.pixels = pixels

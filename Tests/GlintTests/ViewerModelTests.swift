@@ -33,6 +33,19 @@ struct ViewerModelTests {
     let defaults = UserDefaults(suiteName: "GlintTests-\(UUID().uuidString)")!
     return ViewerModel(preferences: Preferences(defaults: defaults))
   }
+
+  @Test func fitEnlargementDefaultsOnAndRespectsSavedPreferences() throws {
+    let suite = "GlintFitPreferencesTests-\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let preferences = Preferences(defaults: defaults)
+    #expect(preferences.enlargesSmallImages)
+    preferences.enlargesSmallImages = false
+    #expect(!Preferences(defaults: defaults).enlargesSmallImages)
+    preferences.enlargesSmallImages = true
+    #expect(Preferences(defaults: defaults).enlargesSmallImages)
+  }
+
   private func settled(_ model: ViewerModel) async throws {
     let deadline = ContinuousClock.now.advanced(by: .seconds(5))
     while model.isLoading || model.isScanning {

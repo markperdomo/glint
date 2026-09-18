@@ -66,7 +66,7 @@ Format support comes from the installed macOS Image I/O decoders. This normally 
 | Escape | Cancel crop, stop slideshow, or leave full screen |
 | ⌘ / | Show the shortcut reference |
 
-At 100%, one source pixel occupies one display pixel, including on Retina displays. Small images stay at or below 100% in Fit unless enlargement is enabled in Settings.
+At 100%, one source pixel occupies one display pixel, including on Retina displays. Fit scales images up or down to fit the available canvas, preserving their proportions and keeping the whole image visible. To cap Fit at 100%, turn off “Enlarge small images to fit” in Settings.
 
 ## Data and editing
 

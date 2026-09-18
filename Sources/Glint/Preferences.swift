@@ -23,7 +23,8 @@ final class Preferences {
   init(defaults d: UserDefaults = .standard) {
     defaults = d
     d.register(defaults: [
-      "wraps": true, "remembersZoom": true, "animatesImages": true, "slideshowDelay": 5.0,
+      "wraps": true, "remembersZoom": true, "enlargesSmallImages": true,
+      "animatesImages": true, "slideshowDelay": 5.0,
     ])
     wraps = d.bool(forKey: "wraps")
     remembersZoom = d.bool(forKey: "remembersZoom")
