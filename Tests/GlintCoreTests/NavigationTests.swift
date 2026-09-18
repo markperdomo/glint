@@ -76,3 +76,22 @@ func fitEnlargesSmallImagesByDefault(pixels: CGSize, backingScale: CGFloat) {
   #expect(viewport.scale == 1)
   #expect(viewport.displaySize == CGSize(width: 100, height: 50))
 }
+
+@Test func predictionFollowsDirectionAndStopsTreatingPausedInputAsRapid() {
+  let now = ContinuousClock.now
+  var prediction = BrowsingPrediction()
+  #expect(prediction.offsets == [1, -1, 2, -2])
+  prediction.record(offset: 1, at: now)
+  #expect(!prediction.isRapid(at: now))
+  prediction.record(offset: 1, at: now.advanced(by: .milliseconds(50)))
+  #expect(prediction.offsets == [1, 2, 3, -1, 4, 5])
+  #expect(prediction.isRapid(at: now.advanced(by: .milliseconds(60))))
+  #expect(!prediction.isRapid(at: now.advanced(by: .milliseconds(200))))
+  prediction.record(offset: -1, at: now.advanced(by: .milliseconds(100)))
+  #expect(prediction.offsets == [-1, 1, -2, 2])
+  prediction.record(offset: -1, at: now.advanced(by: .milliseconds(150)))
+  #expect(prediction.offsets == [-1, -2, -3, 1, -4, -5])
+  prediction.record(offset: 1, at: now.advanced(by: .seconds(2)))
+  #expect(!prediction.isRapid(at: now.advanced(by: .seconds(2))))
+  #expect(prediction.offsets == [1, -1, 2, -2])
+}

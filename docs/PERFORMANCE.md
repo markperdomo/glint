@@ -4,10 +4,10 @@
 
 - Directory enumeration, compressed-image decode, and Core Image adjustment rendering run off the main actor.
 - The canvas displays an already-decoded image through a persistent Core Animation layer.
-- Normal browsing chooses a 1024/2048/4096/8192-pixel long-edge rendition based on the window. A typical window starts at 2048 pixels. High zoom requests 8192 pixels. Metadata retains original dimensions.
+- Navigation publishes cached viewer/sidebar pixels synchronously, or decodes a 512-pixel preview before requesting the final 1024/2048/4096/8192-pixel long-edge rendition. A typical window refines to 2048 pixels. High zoom requests 8192 pixels. Metadata and viewport geometry always retain original dimensions.
 - The viewer cache retains at most 256 MiB of decoded images; thumbnails retain at most 48 MiB. These are cache limits, **not a total RSS limit**: in-flight decoding, the visible image, image-source internals, Core Image, and compositor textures consume additional memory.
-- Prefetch visits next, previous, next+2, previous−2, one at a time. Cancellation and generation checks keep obsolete results off screen.
-- Thumbnail work has a separate serial worker so a contact sheet does not queue work in front of the current image. Cache lookup remains available while its worker is decoding another image.
+- Prefetch starts symmetrically, then favors the navigation direction after repeated input: ahead 1/2/3, behind 1, ahead 4/5. It warms previews first, then the nearest two renditions, capped at 4096 pixels. Rapid input defers final refinement until 140 ms after the latest navigation input.
+- Viewer decoding is bounded to two jobs, with at most one speculative job; thumbnails have an independent single-job pipeline. Identical in-flight requests share a decode. Cancelling a subscriber removes abandoned queued work but lets running work remain adoptable and cacheable. Generation checks prevent stale display updates. These bounds apply to the shared viewer/thumbnail pipelines; export and edit tasks have separate execution paths.
 
 ## Reproduce a decode benchmark
 
@@ -16,7 +16,7 @@ swift Scripts/generate-fixtures.swift /tmp/Glint-Samples
 swift run -c release glint-bench /tmp/Glint-Samples 12
 ```
 
-The fixture script creates twelve 6000 × 4000 JPEG test charts. The benchmark reports directory scan time, cold per-image decode median/p95, reverse-pass duration, cache hits/misses, and retained bytes. Cold means absent from Glint's decoded-image cache; it does not flush the OS filesystem cache.
+The fixture script creates twelve 6000 × 4000 JPEG test charts. The benchmark reports directory scan time, cold per-image decode median/p95, reverse-pass duration, cache hits/misses, actual decode/shared-request counts, and retained bytes. It also measures a fresh pipeline doing 512-pixel preview followed by final refinement, and synchronous cache-lookup time. The progressive pass follows the direct pass, so OS and decoder warm-up can differ. Cold means absent from Glint's decoded-image cache; it does not flush the OS filesystem cache.
 
 Use a real collection as well:
 
@@ -37,9 +37,31 @@ Apple M4 Max, 36 GB RAM, macOS 27, Xcode 27 / Swift 6.4, optimized build, the tw
 
 The second run performs less pixel work and keeps the entire sample collection in cache. This is a development sanity check, not a same-resolution speed comparison or a representative photo-library benchmark. Hardware/service warm-up and concurrent development work can affect these single-run numbers. Pass a fourth argument to the benchmark to choose the decode limit, for example `glint-bench /path 12 4096`.
 
+### Progressive-loading sample — September 17, 2026
+
+Same machine and twelve synthetic 24 MP JPEGs, optimized build, 2048-pixel final rendition:
+
+| Operation | Median | p95 |
+| --- | --- | --- |
+| Direct final decode | 42.24 ms | 82.44 ms |
+| Progressive preview available | 6.514 ms | 6.684 ms |
+| Progressive final image, including preview work | 49.630 ms | 52.077 ms |
+| Synchronous cached-rendition lookup | 0.001 ms | 0.011 ms |
+
+All 12 images had cached renditions at the end. This is one development sample, with no competing prefetch or thumbnail tasks in the benchmark. It demonstrates the earlier-preview/final-refinement tradeoff, not a controlled overall speedup. It excludes input delivery, UI work, compositing, and scanout; cache lookup timing is not input-to-display latency.
+
+## Inspect navigation latency
+
+Use Instruments' Points of Interest and Core Animation tracks with the optimized app. Filter signposts to subsystem `app.glint`, category `Navigation`:
+
+- `Selection to canvas` begins when selection changes and ends when its image is assigned to the canvas layer. Keep only intervals ending with `outcome=submitted`; superseded, failed, and suspended selections are explicitly marked.
+- `Preview ready` and `Rendition ready` mark asynchronous decode publication.
+
+Layer submission is **not** a physical presentation timestamp. Correlate these intervals with Core Animation frames to investigate visible hitches; do not report them as keypress-to-photon measurements. Test forward/reverse bursts, abrupt direction changes, cold/cache-hit navigation, zoom during refinement, and large collections while monitoring peak RSS.
+
 ## Tests
 
-`swift test` exercises natural sorting, wrapping/clamping, Retina/fit geometry, EXIF orientation, GIF frames/timing, PDFs, corrupt images, archive integrity/bounds/Deflate, export dimensions, original-file preservation, cache invalidation/budgets, stale scan/load cancellation, filtering, selection preservation, folder deletion refresh, and immediate zoom/key sequencing.
+`swift test` exercises natural sorting, wrapping/clamping, Retina/fit geometry, EXIF orientation, GIF frames/timing, PDFs, corrupt images, archive integrity/bounds/Deflate, export dimensions, original-file preservation, cache invalidation/budgets, stale scan/load cancellation, filtering, selection preservation, folder deletion refresh, immediate zoom/key sequencing, synchronous preview publication and final refinement, directional input prediction, shared-request cancellation and promotion, foreground capacity, abandoned queue removal, and stale in-flight invalidation.
 
 Some tests use the real Image I/O type registry and Core Image renderer. They should run in a normal macOS process; a generic shell sandbox that denies LaunchServices and Metal access can produce unrelated failures.
 

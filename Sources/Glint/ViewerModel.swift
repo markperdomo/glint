@@ -2,10 +2,16 @@ import AppKit
 import GlintCore
 import SwiftUI
 import UniformTypeIdentifiers
+import os
 
 @MainActor @Observable
 final class ViewerModel {
   let preferences: Preferences
+  @ObservationIgnored private let pipeline: ImagePipeline
+  @ObservationIgnored private let thumbnailPipeline: ImagePipeline
+  @ObservationIgnored private var prediction = BrowsingPrediction()
+  @ObservationIgnored private var navigationTrace: OSSignpostID?
+  private static let performanceLog = OSLog(subsystem: "app.glint", category: "Navigation")
   private(set) var assets: [ImageAsset] = []
   private(set) var visibleAssets: [ImageAsset] = []
   private(set) var selectedID: String?
@@ -62,8 +68,13 @@ final class ViewerModel {
   @ObservationIgnored weak var window: NSWindow?
   @ObservationIgnored var bringToFront: (() -> Void)?
 
-  init(preferences: Preferences) {
+  init(
+    preferences: Preferences, pipeline: ImagePipeline = .shared,
+    thumbnailPipeline: ImagePipeline = .thumbnails
+  ) {
     self.preferences = preferences
+    self.pipeline = pipeline
+    self.thumbnailPipeline = thumbnailPipeline
     recentURLs = (UserDefaults.standard.stringArray(forKey: "recentPaths") ?? []).map {
       URL(fileURLWithPath: $0)
     }
@@ -161,8 +172,21 @@ final class ViewerModel {
     }
   }
 
-  func select(_ id: String?, remember: Bool = true, force: Bool = false) {
+  func select(
+    _ id: String?, remember: Bool = true, force: Bool = false, navigationOffset: Int? = nil
+  ) {
     guard id != selectedID || force else { return }
+    if let navigationOffset {
+      prediction.record(offset: navigationOffset)
+    } else {
+      prediction = BrowsingPrediction()
+    }
+    finishNavigationTrace("superseded")
+    if id != nil {
+      let trace = OSSignpostID(log: Self.performanceLog)
+      navigationTrace = trace
+      os_signpost(.begin, log: Self.performanceLog, name: "Selection to canvas", signpostID: trace)
+    }
     if remember, let selectedID {
       history.append(selectedID)
       if history.count > 1000 { history.removeFirst() }
@@ -189,7 +213,7 @@ final class ViewerModel {
         from: selectedIndex ?? 0, offset: offset, count: visibleAssets.count,
         wraps: preferences.wraps)
     else { return }
-    select(visibleAssets[index].id)
+    select(visibleAssets[index].id, navigationOffset: offset)
   }
   func first() { select(visibleAssets.first?.id) }
   func last() { select(visibleAssets.last?.id) }
@@ -256,27 +280,58 @@ final class ViewerModel {
     let generation = UUID()
     loadGeneration = generation
     loadError = nil
-    if !preserving {
+    guard let asset = asset ?? current else {
       decoded = nil
       displayImage = nil
-    }
-    guard let asset = asset ?? current else {
       isLoading = false
+      loadingDimension = nil
       return
+    }
+    if !preserving {
+      // Publish identity, dimensions, and cached pixels in the same main-actor
+      // turn. Never retain the previous selection under the new filename.
+      let candidates = [
+        pipeline.cachedImage(for: asset, frame: frameIndex, maximumDimension: decodeDimension),
+        thumbnailPipeline.cachedImage(
+          for: asset, frame: frameIndex, maximumDimension: decodeDimension),
+      ].compactMap { $0 }
+      decoded = candidates.max {
+        max($0.image.width, $0.image.height) < max($1.image.width, $1.image.height)
+      }
+      displayImage = decoded?.image
     }
     isLoading = true
     let dimension = decodeDimension
     loadingDimension = dimension
     let frame = frameIndex
+    let rapid = !preserving && prediction.isRapid()
+    let deadline = rapid ? prediction.settlingDeadline : nil
+    let cachedDimension = decoded.map { max($0.image.width, $0.image.height) } ?? 0
+    let needsPreview =
+      !preserving
+      && (decoded == nil || (rapid && cachedDimension < BrowsingPrediction.previewDimension))
+    let pipeline = pipeline
+    prefetchNeighbors(dimension: dimension, previewsOnly: rapid)
     loadTask = Task { [weak self] in
       do {
-        let decoded = try await ImagePipeline.shared.image(
+        if needsPreview {
+          let preview = try await pipeline.image(
+            for: asset, frame: frame, maximumDimension: BrowsingPrediction.previewDimension)
+          guard let self, self.loadGeneration == generation, !Task.isCancelled else { return }
+          self.decoded = preview
+          self.renderEdits()
+          os_signpost(.event, log: Self.performanceLog, name: "Preview ready")
+        }
+        if let deadline { try await ContinuousClock().sleep(until: deadline) }
+        try Task.checkCancellation()
+        let decoded = try await pipeline.image(
           for: asset, frame: frame, maximumDimension: dimension)
         guard let self, self.loadGeneration == generation, !Task.isCancelled else { return }
         self.decoded = decoded
         self.isLoading = false
         self.loadingDimension = nil
         self.renderEdits()
+        os_signpost(.event, log: Self.performanceLog, name: "Rendition ready")
         self.prefetchNeighbors(dimension: dimension)
         if decoded.metadata.isAnimated && self.preferences.animatesImages && self.edits.isIdentity {
           self.startAnimation()
@@ -284,26 +339,55 @@ final class ViewerModel {
         self.requestResolution()
       } catch is CancellationError {
       } catch {
-        guard let self, self.loadGeneration == generation else { return }
+        guard let self, self.loadGeneration == generation, !Task.isCancelled else { return }
         self.isLoading = false
         self.loadingDimension = nil
         self.loadError = error.localizedDescription
+        self.finishNavigationTrace("failed")
       }
     }
   }
 
-  private func prefetchNeighbors(dimension: Int) {
+  private func prefetchNeighbors(dimension: Int, previewsOnly: Bool = false) {
+    prefetchTask?.cancel()
     guard let index = selectedIndex else { return }
-    let neighbors = [1, -1, 2, -2].compactMap {
+    var seen: Set<Int> = [index]
+    let neighbors = prediction.offsets.compactMap {
       Navigation.index(
         from: index, offset: $0, count: visibleAssets.count, wraps: preferences.wraps)
-    }.filter { $0 != index }.map { visibleAssets[$0] }
+    }.filter { seen.insert($0).inserted }.map { visibleAssets[$0] }
+    let pipeline = pipeline
+    // Keep cheap previews farther ahead, with window-sized pixels close by.
+    // High zoom must not fill the cache with speculative 8192-pixel images.
+    let neighborDimension = min(dimension, 4096)
     prefetchTask = Task(priority: .utility) {
       for asset in neighbors {
         guard !Task.isCancelled else { return }
-        _ = try? await ImagePipeline.shared.image(for: asset, maximumDimension: dimension)
+        _ = try? await pipeline.image(
+          for: asset, maximumDimension: BrowsingPrediction.previewDimension, priority: .prefetch)
+      }
+      guard !previewsOnly else { return }
+      for asset in neighbors.prefix(2) {
+        guard !Task.isCancelled else { return }
+        _ = try? await pipeline.image(
+          for: asset, maximumDimension: neighborDimension, priority: .prefetch)
       }
     }
+  }
+
+  /// Ends at CALayer submission, not physical display scanout. Pair these
+  /// signposts with Core Animation's Instruments track to inspect presentation.
+  func canvasDidSubmit(_ image: CGImage?) {
+    guard let image, image === displayImage else { return }
+    finishNavigationTrace("submitted")
+  }
+
+  private func finishNavigationTrace(_ outcome: String) {
+    guard let trace = navigationTrace else { return }
+    os_signpost(
+      .end, log: Self.performanceLog, name: "Selection to canvas", signpostID: trace,
+      "outcome=%{public}@", outcome)
+    navigationTrace = nil
   }
 
   func stepFrame(_ offset: Int) {
@@ -325,9 +409,10 @@ final class ViewerModel {
     loadGeneration = generation
     let frame = frameIndex
     let dimension = decodeDimension
+    let pipeline = pipeline
     loadTask = Task { [weak self] in
       do {
-        let image = try await ImagePipeline.shared.image(
+        let image = try await pipeline.image(
           for: asset, frame: frame, maximumDimension: dimension)
         guard let self, self.loadGeneration == generation, !Task.isCancelled else { return }
         self.decoded = image
@@ -358,7 +443,7 @@ final class ViewerModel {
         do {
           try await Task.sleep(for: .seconds(self.decoded?.frameDuration ?? 0.1))
           let frame = (self.frameIndex + 1) % count
-          let next = try await ImagePipeline.shared.image(
+          let next = try await self.pipeline.image(
             for: asset, frame: frame, maximumDimension: dimension)
           guard self.loadGeneration == generation, !Task.isCancelled else { return }
           self.frameIndex = frame
@@ -528,6 +613,7 @@ final class ViewerModel {
     stopAnimation()
     stopSlideshow()
     prefetchTask?.cancel()
+    finishNavigationTrace("suspended")
     monitor.stop()
   }
   func resume() {

@@ -105,6 +105,7 @@ final class ImageCanvas: NSView {
       cropLayer.path = nil
     }
     imageLayer.contents = image
+    model?.canvasDidSubmit(image)
     imageLayer.magnificationFilter = nearest ? .nearest : .linear
     imageLayer.isHidden = image == nil
     pixelSize = pixels

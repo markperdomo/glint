@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import GlintCore
 import ImageIO
 import Testing
 import UniformTypeIdentifiers
@@ -9,7 +10,7 @@ import UniformTypeIdentifiers
 
 @Suite(.serialized) @MainActor
 struct ViewerModelTests {
-  private func makeFolder() throws -> URL {
+  private func makeFolder(scale: Int = 1) throws -> URL {
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
       "GlintModelTests-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -17,11 +18,12 @@ struct ViewerModelTests {
       let url = folder.appendingPathComponent("image\(index).png")
       let context = try #require(
         CGContext(
-          data: nil, width: index * 20, height: 40, bitsPerComponent: 8, bytesPerRow: 0,
+          data: nil, width: index * 20 * scale, height: 40 * scale, bitsPerComponent: 8,
+          bytesPerRow: 0,
           space: CGColorSpace(name: CGColorSpace.sRGB)!,
           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
       context.setFillColor(CGColor(gray: CGFloat(index) / 12, alpha: 1))
-      context.fill(CGRect(x: 0, y: 0, width: index * 20, height: 40))
+      context.fill(CGRect(x: 0, y: 0, width: index * 20 * scale, height: 40 * scale))
       let destination = try #require(
         CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
       CGImageDestinationAddImage(destination, try #require(context.makeImage()), nil)
@@ -71,6 +73,77 @@ struct ViewerModelTests {
     #expect(model.current?.shortName == "image11.png")
     #expect(model.decoded?.metadata.pixelWidth == 220)
     #expect(model.displayImage?.width == 220)
+  }
+
+  @Test func navigationPublishesCachedThumbnailSynchronouslyThenRefinesIt() async throws {
+    let folder = try makeFolder()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let pipeline = ImagePipeline(byteLimit: 1_000_000)
+    let thumbnails = ImagePipeline(byteLimit: 100_000)
+    let defaults = UserDefaults(suiteName: "GlintPreviewTests-\(UUID().uuidString)")!
+    let model = ViewerModel(
+      preferences: Preferences(defaults: defaults), pipeline: pipeline,
+      thumbnailPipeline: thumbnails)
+    defer { model.suspend() }
+    model.open([folder])
+    try await settled(model)
+    let target = try #require(model.visibleAssets.first { $0.shortName == "image7.png" })
+    let preview = try await thumbnails.image(for: target, maximumDimension: 40)
+    model.select(target.id)
+    // No await: these pixels and their original dimensions must be published
+    // before the asynchronous foreground request has any opportunity to run.
+    #expect(model.current?.id == target.id)
+    #expect(model.displayImage === preview.image)
+    #expect(model.displayPixelSize == CGSize(width: 140, height: 40))
+    #expect(model.isLoading)
+    try await settled(model)
+    #expect(model.displayImage?.width == 140)
+    #expect(model.loadError == nil)
+    // A fully cached image also survives navigation without a blank turn.
+    model.first()
+    model.select(target.id)
+    #expect(model.displayImage?.width == 140)
+    try await settled(model)
+  }
+
+  @Test func rapidNavigationRefinesALargeCachedPreviewAfterSettling() async throws {
+    let folder = try makeFolder(scale: 10)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let pipeline = ImagePipeline(byteLimit: 20_000_000)
+    let defaults = UserDefaults(suiteName: "GlintRefinementTests-\(UUID().uuidString)")!
+    let model = ViewerModel(
+      preferences: Preferences(defaults: defaults), pipeline: pipeline,
+      thumbnailPipeline: ImagePipeline(byteLimit: 0))
+    defer { model.suspend() }
+    model.open([folder])
+    try await settled(model)
+    let target = try #require(model.visibleAssets.first { $0.shortName == "image10.png" })
+    _ = try await pipeline.image(for: target, maximumDimension: 512)
+    model.select(model.visibleAssets[7].id)
+    model.navigate(1)
+    model.navigate(1)
+    #expect(model.current?.id == target.id)
+    #expect(model.displayImage?.width == 512)
+    #expect(model.displayPixelSize == CGSize(width: 2000, height: 400))
+    #expect(model.isLoading)
+    try await settled(model)
+    #expect(model.displayImage?.width == 2000)
+    #expect(!model.isLoading)
+  }
+
+  @Test func rapidDirectionChangesStillSettleOnTheCorrectImage() async throws {
+    let folder = try makeFolder()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let model = makeModel()
+    defer { model.suspend() }
+    model.open([folder])
+    try await settled(model)
+    for _ in 0..<6 { model.navigate(1) }
+    for _ in 0..<3 { model.navigate(-1) }
+    try await settled(model)
+    #expect(model.current?.shortName == "image4.png")
+    #expect(model.displayImage?.width == 80)
+    #expect(!model.isLoading)
   }
 
   @Test func sortingPreservesSelectionAndFilteringClearsStaleImages() async throws {

@@ -32,6 +32,7 @@ Use the Xcode-built `.app` for Finder’s **Open With**, Dock, document icons, a
 - Open images, folders, multiple selected files, ZIP/CBZ archives, and clipboard images. Drop files anywhere in the window.
 - Natural filename sorting, date/size/type sorting, reverse order, filename filtering, optional recursive folders, and recent locations.
 - Thumbnail sidebar and contact sheet with asynchronous, cached thumbnails.
+- Immediate cached previews, progressive refinement, and directional prefetch for fast keyboard browsing.
 - Next/previous, first/last, jumps of 10/100, random browsing with history, and optional looping.
 - Fit, fill, actual pixels, pinch zoom, double-click zoom, drag/scroll panning, pixel interpolation, and four canvas backgrounds.
 - Full screen, distraction-free view, timed/random slideshow, and display-sleep suppression during slideshows.
