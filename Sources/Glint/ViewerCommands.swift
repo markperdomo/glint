@@ -25,7 +25,8 @@ struct ViewerCommands: Commands {
         model.pasteImage()
       }.keyboardShortcut("v", modifiers: [.command, .shift])
     }
-    CommandGroup(replacing: .saveItem) {
+    // Keep the standard Close command (⌘W), which is part of the save group.
+    CommandGroup(after: .saveItem) {
       Button("Export…") { model.exportSheet = true }.keyboardShortcut(
         "s", modifiers: [.command, .shift]
       ).disabled(!model.canEdit)
