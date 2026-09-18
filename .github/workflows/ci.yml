@@ -1,0 +1,43 @@
+name: macOS
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Tests
+        run: swift test
+      - name: Swift style
+        run: swift format lint --strict --recursive Sources Tests Package.swift
+      - name: Verify generated Xcode project
+        run: |
+          python3 Scripts/generate-project.py
+          git diff --exit-code -- Glint.xcodeproj
+      - name: Build release app
+        run: ./Scripts/build.sh Release
+      - name: Package app
+        run: ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Release/Glint.app build/Glint-macOS-arm64.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Glint-macOS-arm64
+          path: build/Glint-macOS-arm64.zip
+          if-no-files-found: error
+          retention-days: 14

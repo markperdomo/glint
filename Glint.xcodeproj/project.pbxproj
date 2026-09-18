@@ -1,0 +1,93 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 60;
+	objects = {
+		B3DE406DD9C8D67E1E3359C4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/BrowserSidebar.swift"; sourceTree = SOURCE_ROOT; };
+		4667718B23A36BBE00EA1B1D = { isa = PBXBuildFile; fileRef = B3DE406DD9C8D67E1E3359C4; };
+		96BF38C27987815562211515 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/CanvasView.swift"; sourceTree = SOURCE_ROOT; };
+		6CA86F4D6DB96A507E35D681 = { isa = PBXBuildFile; fileRef = 96BF38C27987815562211515; };
+		5BD0E6617E05C18A2BBDE31F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/ContentView.swift"; sourceTree = SOURCE_ROOT; };
+		378D56498EFF8EBF0899498F = { isa = PBXBuildFile; fileRef = 5BD0E6617E05C18A2BBDE31F; };
+		8813FD5F8CE7F6F7485F3D65 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/FileActions.swift"; sourceTree = SOURCE_ROOT; };
+		620313DB4AA0CACCE472E7D0 = { isa = PBXBuildFile; fileRef = 8813FD5F8CE7F6F7485F3D65; };
+		ED10E1AA17B281F7DFB57890 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/FolderMonitor.swift"; sourceTree = SOURCE_ROOT; };
+		132FE0FF70ECEE5ED43DD010 = { isa = PBXBuildFile; fileRef = ED10E1AA17B281F7DFB57890; };
+		C94BE13F23FE72471760445A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/GlintApp.swift"; sourceTree = SOURCE_ROOT; };
+		AFF327B2898D66583F2EB9AC = { isa = PBXBuildFile; fileRef = C94BE13F23FE72471760445A; };
+		4DB50D6D495B2C108DD0F4CB = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/InspectorView.swift"; sourceTree = SOURCE_ROOT; };
+		1E83E2E0C6B4EC8BDD36D987 = { isa = PBXBuildFile; fileRef = 4DB50D6D495B2C108DD0F4CB; };
+		3081D919CC13C13D3DFF45AE = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/Preferences.swift"; sourceTree = SOURCE_ROOT; };
+		FADA48550C61AB3AD3843A0D = { isa = PBXBuildFile; fileRef = 3081D919CC13C13D3DFF45AE; };
+		77CA160EC30B08C46516AA5A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/ViewerCommands.swift"; sourceTree = SOURCE_ROOT; };
+		C05F4AF9C86DAF0BD01893CF = { isa = PBXBuildFile; fileRef = 77CA160EC30B08C46516AA5A; };
+		D408044EFEE35BE0B83F6F9B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/ViewerModel.swift"; sourceTree = SOURCE_ROOT; };
+		6A1948B8FBFBC87497DD166C = { isa = PBXBuildFile; fileRef = D408044EFEE35BE0B83F6F9B; };
+		562AE7BAD76890A53E475864 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Glint/WelcomeView.swift"; sourceTree = SOURCE_ROOT; };
+		5E1EAE9716A382A48E5B093D = { isa = PBXBuildFile; fileRef = 562AE7BAD76890A53E475864; };
+		3685E330EC5277A9DD5661C6 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		716E9590E60B3AFA6E62BF18 = { isa = PBXBuildFile; fileRef = 3685E330EC5277A9DD5661C6; };
+		0112DAE3F84CB4DF5179BE01 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/Info.plist; sourceTree = SOURCE_ROOT; };
+		38A007151ABE87CC01A5B6E9 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = Glint.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9,); name = Products; sourceTree = "<group>"; };
+		8309DD304D804F9D7F6302F5 = { isa = PBXGroup; children = (B3DE406DD9C8D67E1E3359C4,96BF38C27987815562211515,5BD0E6617E05C18A2BBDE31F,8813FD5F8CE7F6F7485F3D65,ED10E1AA17B281F7DFB57890,C94BE13F23FE72471760445A,4DB50D6D495B2C108DD0F4CB,3081D919CC13C13D3DFF45AE,77CA160EC30B08C46516AA5A,D408044EFEE35BE0B83F6F9B,562AE7BAD76890A53E475864,); name = App; sourceTree = "<group>"; };
+		50F0FC3AFD5FBC981B5A0DDD = { isa = PBXGroup; children = (3685E330EC5277A9DD5661C6,0112DAE3F84CB4DF5179BE01,); name = Resources; sourceTree = "<group>"; };
+		870B3294C0CBD48AF6BBCC1B = { isa = PBXGroup; children = (8309DD304D804F9D7F6302F5,50F0FC3AFD5FBC981B5A0DDD,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>"; };
+		CF21FADD42EAB8F8303A3895 = { isa = XCLocalSwiftPackageReference; relativePath = .; };
+		8D6A224FA1D1DD751157EB0C = { isa = XCSwiftPackageProductDependency; package = CF21FADD42EAB8F8303A3895; productName = GlintCore; };
+		D9F82689E8F760ECED47CA3E = { isa = PBXBuildFile; productRef = 8D6A224FA1D1DD751157EB0C; };
+		F612CD2E22E187AC48B5913C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (4667718B23A36BBE00EA1B1D,6CA86F4D6DB96A507E35D681,378D56498EFF8EBF0899498F,620313DB4AA0CACCE472E7D0,132FE0FF70ECEE5ED43DD010,AFF327B2898D66583F2EB9AC,1E83E2E0C6B4EC8BDD36D987,FADA48550C61AB3AD3843A0D,C05F4AF9C86DAF0BD01893CF,6A1948B8FBFBC87497DD166C,5E1EAE9716A382A48E5B093D,); runOnlyForDeploymentPostprocessing = 0; };
+		86F6FE2DD6E869C1842A14B3 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (716E9590E60B3AFA6E62BF18,); runOnlyForDeploymentPostprocessing = 0; };
+		69680EDE0CF9B24DB8DBFE04 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (D9F82689E8F760ECED47CA3E,); runOnlyForDeploymentPostprocessing = 0; };
+		ED8772ADEC3A6C25161BC957 = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
+        MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 6.0; ARCHS = arm64;
+        CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES;
+        SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+        SWIFT_COMPILATION_MODE = singlefile;
+        DEBUG_INFORMATION_FORMAT = dwarf;
+        ENABLE_TESTABILITY = YES;
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+    }; };
+		4D8F54E7CBAF670D9F6C230D = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
+        PRODUCT_NAME = Glint; PRODUCT_BUNDLE_IDENTIFIER = app.glint.viewer;
+        INFOPLIST_FILE = Resources/Info.plist; GENERATE_INFOPLIST_FILE = NO;
+        ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+        CODE_SIGN_STYLE = Manual; CODE_SIGN_IDENTITY = "-";
+        ENABLE_HARDENED_RUNTIME = YES; ENABLE_APP_SANDBOX = NO;
+        LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+        CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1.0;
+        COMBINE_HIDPI_IMAGES = YES;
+    }; };
+		00F209874A1F7309F6DCEAA7 = { isa = XCBuildConfiguration; name = Release; buildSettings = {
+        MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 6.0; ARCHS = arm64;
+        CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES;
+        SWIFT_OPTIMIZATION_LEVEL = "-O";
+        SWIFT_COMPILATION_MODE = wholemodule;
+        DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+        ENABLE_TESTABILITY = NO;
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+    }; };
+		1A6EFC2CD0AF63DD14BE0438 = { isa = XCBuildConfiguration; name = Release; buildSettings = {
+        PRODUCT_NAME = Glint; PRODUCT_BUNDLE_IDENTIFIER = app.glint.viewer;
+        INFOPLIST_FILE = Resources/Info.plist; GENERATE_INFOPLIST_FILE = NO;
+        ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+        CODE_SIGN_STYLE = Manual; CODE_SIGN_IDENTITY = "-";
+        ENABLE_HARDENED_RUNTIME = YES; ENABLE_APP_SANDBOX = NO;
+        LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+        CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1.0;
+        COMBINE_HIDPI_IMAGES = YES;
+    }; };
+		640DC9EFD529235A8D9E2727 = { isa = XCConfigurationList; buildConfigurations = (ED8772ADEC3A6C25161BC957,00F209874A1F7309F6DCEAA7,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		976B52545947CA66FD9EF2A4 = { isa = XCConfigurationList; buildConfigurations = (4D8F54E7CBAF670D9F6C230D,1A6EFC2CD0AF63DD14BE0438,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F75109BEB4DD8800DA6B45F8 = { isa = PBXNativeTarget; buildConfigurationList = 976B52545947CA66FD9EF2A4;
+    buildPhases = (F612CD2E22E187AC48B5913C,69680EDE0CF9B24DB8DBFE04,86F6FE2DD6E869C1842A14B3,); buildRules = (); dependencies = ();
+    name = Glint; packageProductDependencies = (8D6A224FA1D1DD751157EB0C,); productName = Glint; productReference = 38A007151ABE87CC01A5B6E9;
+    productType = "com.apple.product-type.application"; };
+		98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastSwiftUpdateCheck = 2600; LastUpgradeCheck = 2600; };
+    buildConfigurationList = 640DC9EFD529235A8D9E2727; compatibilityVersion = "Xcode 16.0"; developmentRegion = en;
+    hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = 870B3294C0CBD48AF6BBCC1B; packageReferences = (CF21FADD42EAB8F8303A3895,);
+    productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; targets = (F75109BEB4DD8800DA6B45F8,); };
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0;
+}
